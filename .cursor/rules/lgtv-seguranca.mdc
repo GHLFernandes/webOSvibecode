@@ -1,0 +1,123 @@
+---
+description: Regras de segurança e escopo para trabalhar na TV LG 43LJ5550 (webOS 3.5, rooteada)
+alwaysApply: true
+---
+
+# Regras do projeto: TV LG 43LJ5550
+
+## Contexto
+
+- TV: LG 43LJ5550, **webOS 3.5** (2017), hardware de entrada (SoC fraco, pouca RAM).
+- Root via **DejaVuln** + **Homebrew Channel** (HBC).
+- Acesso: `ssh lgtv` (root@192.168.68.111, chave `~/.ssh/lgtv`). Desenvolvimento a partir do WSL2.
+- Ferramentas no PC: `ares-cli` (device `lgtv`).
+- Atualizações de firmware estão **bloqueadas** pelo HBC e devem continuar assim.
+
+## Objetivo (escopo fechado)
+
+Só isto, nada além:
+
+1. **Remover anúncios** do sistema (home, banners, recomendações patrocinadas).
+2. **Cortar telemetria**: o sistema não deve enviar metadados, dados de uso, ACR/Live Plus nem logs para a LG ou para terceiros.
+3. **Home mais limpa**.
+4. **Sistema mais rápido** (menos coisa rodando, menos coisa carregando).
+
+Fora desse escopo, **pergunte antes**: features novas, apps extras, ambilight, mudanças de imagem/som etc.
+
+Nota sobre telemetria: o escopo é o que o **sistema** envia. Apps de streaming que o usuário abre (YouTube, Netflix…) se comunicam com os próprios servidores por natureza; não quebre esses apps sem perguntar.
+
+## PROIBIDO (nunca, em hipótese nenhuma)
+
+Estas ações podem **brickar** a TV. Não execute, não sugira como atalho e não gere scripts que as façam:
+
+- Escrever em partições de sistema: kernel, rootfs, tvservice, ou qualquer `/dev/mmcblk*`, `/dev/mtd*`, `/dev/block/*`.
+- Usar `dd`, `mkfs`, `fdisk`, `parted`, `flash_erase`, `nandwrite` ou qualquer ferramenta de flash.
+- `mount -o remount,rw` em `/` ou em qualquer partição de sistema.
+- Instalar, baixar ou aplicar firmware (`.epk`), ou reativar atualizações do sistema.
+- Alterar NVM/configurações de fábrica (serviços de factory, menus de serviço, `systemproperty` de fábrica).
+- Editar, apagar ou substituir os scripts do Homebrew Channel ou do RootMyTV/DejaVuln.
+- Matar ou desativar processos centrais: `tvservice`, `surface-manager`, `sam`, `ls-hubd`/`luna-hub`, `systemd`/`upstart`, `appinstalld`, `dropbear`/SSH, rede (`connman`/`wpa_supplicant`).
+- `rm -rf` fora das áreas permitidas abaixo, ou `rm` com caminho vindo de variável sem validação.
+- Desativar SSH, mudar a rede ou qualquer coisa que corte nosso acesso à TV.
+- Desinstalar apps de sistema (os de `/usr/palm/applications`).
+
+Se uma solução **só** for possível violando uma regra acima, **pare e explique ao usuário**. Não procure um contorno.
+
+## Onde pode escrever
+
+Escrita só nestes lugares:
+
+- `/home/root/` (scripts, configs, hosts customizado, backups).
+- `/media/developer/` (apps instalados via ares/HBC, como o launcher próprio).
+- `/var/lib/webosbrew/init.d/` (scripts de boot do usuário; **criar** arquivos novos, nunca alterar os do HBC).
+
+Todo o resto é **somente leitura**.
+
+Para mudar um arquivo de sistema (ex.: `/etc/hosts`), use **bind mount** de um arquivo em `/home/root/` por cima do original (`mount --bind`), feito por script de init. Isso não altera o rootfs e é desfeito com reboot ou `umount`.
+
+## Fluxo obrigatório
+
+1. **Investigar antes de mudar.** Primeiro só comandos de leitura (`cat`, `ls`, `ps`, `netstat`, `luna-send` de consulta, `getSystemSettings`). Entender, depois propor.
+2. **Classificar cada comando** antes de rodar na TV:
+   - `[LEITURA]`: pode executar.
+   - `[ESCRITA]` em área permitida: mostre o que vai escrever e onde, depois execute.
+   - `[CONFIG]` (luna-send que **altera** configuração), `[BOOT]` (qualquer coisa em `init.d`), `[REBOOT]`, ou parar/desativar qualquer serviço: **peça confirmação explícita do usuário** antes.
+3. **Uma mudança por vez.** Aplicar, testar, confirmar que a TV está estável, só então a próxima.
+4. **Tudo reversível.** Cada mudança vem com um script de desfazer em `scripts/undo/` no repositório. Sem undo, não aplica.
+5. **Backup antes de alterar.** Antes de mudar uma configuração, salve o valor atual (ex.: saída do `getSystemSettings`) em `/home/root/backup/` e em `backups/` no repositório.
+6. **Registrar.** Cada mudança aplicada na TV entra no `CHANGELOG.md` do repositório: data, o que mudou, como desfazer.
+
+## Scripts de boot (`init.d`)
+
+Um script de boot ruim pode deixar a TV em loop de boot. Por isso:
+
+- Teste o script **manualmente via SSH** antes de colocá-lo em `init.d`.
+- Sempre `#!/bin/sh` compatível com **busybox** (sem bashismos).
+- Nunca bloquear: sem loops infinitos, sem `sleep` longo em primeiro plano, sem esperar rede indefinidamente. Trabalho demorado vai para background com timeout.
+- Sempre terminar com `exit 0`; falha de um comando não pode derrubar o boot (`|| true`).
+- Checar se o arquivo/serviço existe antes de agir sobre ele.
+- Um script por responsabilidade, com nome numerado (ex.: `10-hosts-block`, `20-disable-ads`).
+
+## Como atacar cada objetivo (ordem de preferência)
+
+### Anúncios e telemetria
+1. **Configurações oficiais via `luna-send`** (o mesmo que o menu faz): recusar contratos de usuário, desligar Live Plus/ACR, promoções na home, recomendações. É o método mais seguro e reversível.
+2. **Bloqueio por hosts** (bind mount de `/home/root/hosts` sobre `/etc/hosts`): domínios de anúncio (ex.: `*.lgsmartad.com`), telemetria/ACR e update (`snu.lge.com`).
+   - Monte a lista a partir do que a TV **realmente** acessa (observe com `netstat`/logs) e de listas da comunidade (HaGeZi native LG webOS, webosbrew). Não invente domínios.
+   - Mantenha um **allowlist** separado e comentado do que não pode ser bloqueado (LG Content Store, apps que o usuário usa). Bloquear a loja quebra instalação/atualização de apps: **pergunte antes**.
+3. Desativar serviço de sistema só se 1 e 2 não resolverem, um de cada vez, com confirmação e undo, e nunca um serviço da lista proibida.
+
+### Home limpa
+- Primeiro, o que dá via configuração (desligar banners/promoções, remover apps não usados que **não** sejam de sistema).
+- Launcher próprio: app web instalado em `/media/developer` via `ares-install`. **Não** substituir o launcher do sistema mexendo no rootfs. Abrir o launcher via remapeamento de botão ou como app normal.
+
+### Desempenho
+- Reduzir o que carrega: menos apps instalados, home sem conteúdo remoto, bloqueio de domínios (menos requisições).
+- Medir antes e depois (`free`, `top -n 1`, tempo de abertura). Não declarar ganho sem medida.
+- Não mexer em governor de CPU, frequências, swap ou parâmetros de kernel sem perguntar.
+
+## Desenvolvimento de apps para esta TV
+
+- Motor web é um **Chromium antigo**: gerar **ES5** (ou transpilar com target antigo). Não assumir `fetch`, `Promise`, `async/await`, CSS Grid ou flex gap nativos sem polyfill/teste.
+- Nada de frameworks pesados. Vanilla JS ou algo mínimo (ex.: Preact).
+- Navegação 100% por controle remoto (setas, OK, voltar), com foco visível.
+- Leve: poucos assets, sem animações caras, sem polling agressivo.
+- O app em si também não pode ter telemetria, analytics nem chamadas a serviços externos.
+
+## Repositório
+
+- Nunca commitar chaves privadas, tokens ou senhas.
+- Estrutura sugerida:
+  - `scripts/apply/`: aplicar mudanças.
+  - `scripts/undo/`: desfazer cada mudança.
+  - `init.d/`: scripts de boot (cópia versionada do que está na TV).
+  - `hosts/`: `blocklist.txt` e `allowlist.txt` comentados.
+  - `apps/launcher/`: launcher próprio.
+  - `backups/`: estado anterior das configurações.
+  - `CHANGELOG.md`: tudo que foi aplicado na TV.
+
+## Em caso de problema
+
+- TV instável depois de uma mudança: **pare**, rode o undo correspondente e avise o usuário. Não empilhe correções às cegas.
+- Perdeu acesso SSH: não tente nada criativo; informe o usuário. O Homebrew Channel tem configurações e opção de reboot na própria TV, e o reset de fábrica remove a configuração de root.
+- Na dúvida se algo é seguro: **trate como inseguro e pergunte.**
