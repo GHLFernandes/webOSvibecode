@@ -1,0 +1,12 @@
+#!/bin/sh
+# Disable heavy app preloads after preload manager is up
+(
+	sleep 45
+	for id in netflix amazon youtube.leanback.v4 com.webos.app.container com.webos.app.browser; do
+		luna-send -n 1 luna://com.webos.service.preloadmanager/setPreloadPolicy \
+			"{\"application\":{\"id\":\"$id\",\"isEnabled\":false}}" >/dev/null 2>&1 || true
+		luna-send -n 1 luna://com.webos.applicationManager/closeByAppId \
+			"{\"id\":\"$id\"}" >/dev/null 2>&1 || true
+	done
+) &
+exit 0

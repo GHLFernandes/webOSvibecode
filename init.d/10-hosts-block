@@ -1,0 +1,11 @@
+#!/bin/sh
+# Append custom blocklist after webosbrew regenerates /etc/hosts
+BLOCK="/home/root/hosts/blocklist-extra.txt"
+[ -f "$BLOCK" ] || exit 0
+while read -r line; do
+	case "$line" in ''|\#*) continue ;; esac
+	if ! grep -qF "$line" /etc/hosts 2>/dev/null; then
+		echo "$line" >> /etc/hosts
+	fi
+done < "$BLOCK"
+exit 0

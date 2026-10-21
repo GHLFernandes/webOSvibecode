@@ -22,9 +22,19 @@ Só isto, nada além:
 3. **Home mais limpa**.
 4. **Sistema mais rápido** (menos coisa rodando, menos coisa carregando).
 
+### Apps a manter (uso real)
+
+Manter apenas:
+
+- **YouTube** (preferência: [youtube-webos](https://github.com/webosbrew/youtube-webos) via HBC, mesmo id `youtube.leanback.v4`, após desinstalar o app oficial).
+- **Stremio**: **não** como app na TV (664 MB RAM / webOS 3.5 — `tv.strem.io` reinicia o app). Usar **Stremio no PC/celular + DLNA** para a TV; ver `docs/STREMIO-NA-TV.md`.
+- **Disney+** (`com.disney.alch.prod.lrd.app`) — **opcional**; confirmar se ainda usa.
+
+**Apps de usuário** instalados em `/media/cryptofs/apps/...` que não estão na lista acima (Netflix, Globoplay, Prime, Spotify, Twitch, etc.) **podem ser removidos**, sempre com **confirmação explícita** antes de cada remoção.
+
 Fora desse escopo, **pergunte antes**: features novas, apps extras, ambilight, mudanças de imagem/som etc.
 
-Nota sobre telemetria: o escopo é o que o **sistema** envia. Apps de streaming que o usuário abre (YouTube, Netflix…) se comunicam com os próprios servidores por natureza; não quebre esses apps sem perguntar.
+Nota sobre telemetria: o escopo é o que o **sistema** envia. Apps de streaming que o usuário abre (YouTube, Stremio, Disney+…) se comunicam com os próprios servidores por natureza; não quebre esses apps sem perguntar.
 
 ## PROIBIDO (nunca, em hipótese nenhuma)
 
@@ -53,7 +63,19 @@ Escrita só nestes lugares:
 
 Todo o resto é **somente leitura**.
 
-Para mudar um arquivo de sistema (ex.: `/etc/hosts`), use **bind mount** de um arquivo em `/home/root/` por cima do original (`mount --bind`), feito por script de init. Isso não altera o rootfs e é desfeito com reboot ou `umount`.
+### `/etc/hosts` e bloqueio DNS
+
+O `/etc/hosts` é **regenerado no boot pelo Homebrew Channel** (`/var/lib/webosbrew/startup.sh`): copia para `/tmp/hosts`, faz `mount --bind` e acrescenta bloqueios de **update** (`snu.lge.com`, `su.lge.com`, …) se `webosbrew_block_updates` estiver ativo.
+
+- **Não** fazer bind mount por cima do `/etc/hosts` (conflita com o HBC).
+- Blocklist extra (anúncios/telemetria LG): script numerado em `/var/lib/webosbrew/init.d/` que roda **depois** do trecho de hosts do HBC (via `run-parts`) e **acrescenta** linhas ao mesmo `/etc/hosts` bindado, **preservando** os bloqueios de update.
+- Manter listas versionadas em `hosts/blocklist.txt` e `hosts/allowlist.txt` no repositório.
+
+### Allowlist (apps em uso)
+
+Allowlist comentada só com domínios necessários para **YouTube**, **Stremio** e **Disney+** funcionarem (CDN, APIs, DRM onde aplicável).
+
+- A **LG Content Store** pode ser candidata a bloqueio se nenhum desses apps depender dela para abrir/atualizar — **confirmar com o usuário antes** de bloquear domínios da loja (HBC/repo webosbrew costuma ser canal alternativo de instalação).
 
 ## Fluxo obrigatório
 
@@ -82,9 +104,9 @@ Um script de boot ruim pode deixar a TV em loop de boot. Por isso:
 
 ### Anúncios e telemetria
 1. **Configurações oficiais via `luna-send`** (o mesmo que o menu faz): recusar contratos de usuário, desligar Live Plus/ACR, promoções na home, recomendações. É o método mais seguro e reversível.
-2. **Bloqueio por hosts** (bind mount de `/home/root/hosts` sobre `/etc/hosts`): domínios de anúncio (ex.: `*.lgsmartad.com`), telemetria/ACR e update (`snu.lge.com`).
-   - Monte a lista a partir do que a TV **realmente** acessa (observe com `netstat`/logs) e de listas da comunidade (HaGeZi native LG webOS, webosbrew). Não invente domínios.
-   - Mantenha um **allowlist** separado e comentado do que não pode ser bloqueado (LG Content Store, apps que o usuário usa). Bloquear a loja quebra instalação/atualização de apps: **pergunte antes**.
+2. **Bloqueio por hosts** (via `init.d` após o HBC, ver seção acima): domínios de anúncio/telemetria LG a partir do que a TV **realmente** acessa (`netstat`/logs) e listas da comunidade (HaGeZi native LG webOS, webosbrew). Não invente domínios.
+   - **Allowlist** mínima: YouTube, Stremio, Disney+ (ver `hosts/allowlist.txt`).
+   - Bloqueio da Content Store: **só após confirmação** (ver allowlist).
 3. Desativar serviço de sistema só se 1 e 2 não resolverem, um de cada vez, com confirmação e undo, e nunca um serviço da lista proibida.
 
 ### Home limpa

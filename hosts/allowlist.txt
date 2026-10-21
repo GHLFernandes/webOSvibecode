@@ -1,0 +1,7 @@
+# Do NOT block — required for apps in use (reference only; not applied as deny rules)
+# YouTube / Google
+# youtube.com googlevideo.com ytimg.com gstatic.com googleapis.com
+# Stremio (wrapper)
+# tv.strem.io strem.io stremio.com
+# Disney+
+# disneyplus.com bamgrid.com disney-plus.net

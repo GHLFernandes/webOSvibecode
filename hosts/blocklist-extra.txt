@@ -1,0 +1,8 @@
+# Append-only blocklist (LG ads/telemetry). Update domains must stay in HBC startup.
+127.0.0.1 ade.lgappstv.com
+127.0.0.1 lgads.tv
+127.0.0.1 lgsmartad.lge.com
+127.0.0.1 us-info.lge.com
+127.0.0.1 rdx.lgtvsdp.com
+127.0.0.1 smartshare.lgtvsdp.com
+127.0.0.1 lgtvsdp.com
